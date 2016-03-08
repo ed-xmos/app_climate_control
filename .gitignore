@@ -1,0 +1,8 @@
+.cproject
+.project
+app_climate_control/.settings
+.makefile
+.xproject
+lib_i2c
+lib_logging
+lib_xassert
