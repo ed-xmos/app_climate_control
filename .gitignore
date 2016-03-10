@@ -6,3 +6,5 @@ app_climate_control/.settings
 lib_i2c
 lib_logging
 lib_xassert
+*.xe
+*.xmt

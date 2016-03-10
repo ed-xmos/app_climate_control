@@ -85,6 +85,31 @@ typedef enum{
 
 #define WRAP_TEXT     0   //Wrap if x cursor goes off end off screen
 
+void put_big_char(unsigned char buff[SCREEN_BUFFER_BYTES], char char_to_print, unsigned magnify, unsigned x_offset){
+    unsigned font_idx = (char_to_print - FONT_OFFSET) * FONT_WIDTH;
+    for(int x=0; x<FONT_PITCH; x++){
+        for(int y=0; y<8; y++){
+            unsigned pix_val = (font[font_idx + x] & (0x01 << y)) ? 1 : 0;
+            if (x==FONT_WIDTH) pix_val = 0;
+            for(int mx=0; mx<magnify; mx++){
+                for(int my=0; my<magnify; my++){
+                    set_pixel_in_buffer(buff, (x_offset * FONT_PITCH * magnify) + (x * magnify) + mx, (y * magnify) + my , pix_val);
+                }
+            }
+        }
+    }
+}
+
+void print_big_str(unsigned char string[], unsigned magnify){
+    char *ptr = string;
+    unsigned x_pos = 0;
+    while(*ptr != '\0'){
+        put_big_char(scrn_buff, *ptr, magnify, x_pos);
+        x_pos ++;
+        ptr ++;
+    }
+}
+
 void putchar(unsigned char buff[SCREEN_BUFFER_BYTES], char char_to_print, print_mode_t mode){
   static unsigned char_cursor_x = 0;
   static unsigned char_cursor_y = 0;
@@ -136,7 +161,7 @@ void putchar(unsigned char buff[SCREEN_BUFFER_BYTES], char char_to_print, print_
   }
 #endif
 }
-
+/*
 // Override the weak symbol used for print messages, so general prints go to oled
 int _write(int fd, const unsigned char *data, size_t len) {
   for(int i=0; i<len; i++){
@@ -144,6 +169,7 @@ int _write(int fd, const unsigned char *data, size_t len) {
   }
   return len;
 }
+*/
 
 //draw line from x,y to new x,y
 void draw_line(unsigned char buff[SCREEN_BUFFER_BYTES], unsigned x1, unsigned y1, unsigned x2, unsigned y2, unsigned val)
@@ -283,7 +309,9 @@ void test(client i2c_master_if i_i2c){
       draw_line(scrn_buff, 32, 42, (64-i), calc_arc(i), 1);
       i2c_write(I2C_CMD_MODE, sizeof(ssd1306_128x64_reset_cursor), ssd1306_128x64_reset_cursor);
       //putchar(scrn_buff, '!', OVEREWRITE_ALL);
-      debug_printf("Sum calculator %d * %d = %d\r", i , i , i*i);
+      //put_big_char(scrn_buff, '&', 4, 0);
+      print_big_str("38%", 7);
+      //debug_printf("Calculate %d * %d = %d\r", i , i , i*i);
       i2c_write(I2C_DATA_MODE, 1024, scrn_buff);
 
     }
