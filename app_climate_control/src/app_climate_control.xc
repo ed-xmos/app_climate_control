@@ -314,20 +314,16 @@ void test(client i2c_master_if i_i2c, chanend c_adc){
 
 
   while(1){
-    for (int i=0; i<64; i++){
-      draw_line(scrn_buff, 32 + 64, 42, i + 64, calc_arc(i), 1);
-      draw_line(scrn_buff, 32, 42, (64-i), calc_arc(i), 1);
-      i2c_write(I2C_CMD_MODE, sizeof(ssd1306_128x64_reset_cursor), ssd1306_128x64_reset_cursor);
-      //lcd_putchar(scrn_buff, '!', OVEREWRITE_ALL);
-      //put_big_char(scrn_buff, '&', 4, 0);
-      c_adc :> val;
-      sprintf(my_sting, "%2d%%", val);
-      print_big_str(my_sting, 7);
-      //debug_printf("Calculate %d * %d = %d\r", i , i , i*i);
-      i2c_write(I2C_DATA_MODE, 1024, scrn_buff);
-
+    c_adc :> val;
+    memset(scrn_buff, 0x00, 1024);
+    unsigned pix_val = (val * 3) >> 1;
+    draw_line(scrn_buff, pix_val , 0, pix_val, 64, 1);
+    i2c_write(I2C_CMD_MODE, sizeof(ssd1306_128x64_reset_cursor), ssd1306_128x64_reset_cursor);
+    sprintf(my_sting, "%2d%%", val);
+    print_big_str(my_sting, 7);
+    //debug_printf("Calculate %d * %d = %d\r", i , i , i*i);
+    i2c_write(I2C_DATA_MODE, 1024, scrn_buff);
     }
-  }
 }
 
 #define K   3
