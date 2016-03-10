@@ -1,5 +1,6 @@
 #include <xs1.h>
 #include <debug_print.h>
+#include <stdio.h>
 #include <xclib.h>
 #include <string.h>
 #include <timer.h>
@@ -116,7 +117,7 @@ void print_big_str(unsigned char string[], unsigned magnify){
     }
 }
 
-void putchar(unsigned char buff[SCREEN_BUFFER_BYTES], char char_to_print, print_mode_t mode){
+void lcd_putchar(unsigned char buff[SCREEN_BUFFER_BYTES], char char_to_print, print_mode_t mode){
   static unsigned char_cursor_x = 0;
   static unsigned char_cursor_y = 0;
 
@@ -171,7 +172,7 @@ void putchar(unsigned char buff[SCREEN_BUFFER_BYTES], char char_to_print, print_
 // Override the weak symbol used for print messages, so general prints go to oled
 int _write(int fd, const unsigned char *data, size_t len) {
   for(int i=0; i<len; i++){
-    putchar(scrn_buff, *data++, OVEREWRITE_ALL);
+    lcd_putchar(scrn_buff, *data++, OVEREWRITE_ALL);
   }
   return len;
 }
@@ -293,7 +294,10 @@ static const unsigned char ssd1306_128x64_reset_cursor[] = {
 };
 
 
-void test(client i2c_master_if i_i2c){
+void test(client i2c_master_if i_i2c, chanend c_adc){
+
+  char my_sting[64];
+  int val;
   //convert_to_useful(vu_3_raw);
   //print_buffer_to_console(vu_3);
 
@@ -314,9 +318,11 @@ void test(client i2c_master_if i_i2c){
       draw_line(scrn_buff, 32 + 64, 42, i + 64, calc_arc(i), 1);
       draw_line(scrn_buff, 32, 42, (64-i), calc_arc(i), 1);
       i2c_write(I2C_CMD_MODE, sizeof(ssd1306_128x64_reset_cursor), ssd1306_128x64_reset_cursor);
-      //putchar(scrn_buff, '!', OVEREWRITE_ALL);
+      //lcd_putchar(scrn_buff, '!', OVEREWRITE_ALL);
       //put_big_char(scrn_buff, '&', 4, 0);
-      print_big_str("38%", 7);
+      c_adc :> val;
+      sprintf(my_sting, "%2d%%", val);
+      print_big_str(my_sting, 7);
       //debug_printf("Calculate %d * %d = %d\r", i , i , i*i);
       i2c_write(I2C_DATA_MODE, 1024, scrn_buff);
 
@@ -324,7 +330,7 @@ void test(client i2c_master_if i_i2c){
   }
 }
 
-#define K   6
+#define K   3
 /* 1st order recursive filter aka leaky integrator
  *      K    Bandwidth  Rise Time (samps)
  *      1    0.12       3
@@ -337,7 +343,7 @@ void test(client i2c_master_if i_i2c){
  *      8    0.0007     561
  */
 
-void test_adc(void){
+void test_adc(chanend c_adc){
     timer t;
     int t_start, t_end, t_diff, adc_val, filter_reg = 0;
     int tp_start, tp_end, tp_diff, port_timer_rollover;
@@ -362,6 +368,7 @@ void test_adc(void){
         filter_reg = filter_reg - (filter_reg >> K) + (t_end - t_start); //Leaky integrator
         adc_val = filter_reg >> K;
         //adc_val >>= 10;
+        c_adc <: (adc_val >> 10);
         //xscope_int(0, adc_val);
 
         //debug_printf("Filtered ADC val = %d\n", adc_val);
@@ -386,11 +393,11 @@ void test_quadrature(void){
 }
 int main(void){
   i2c_master_if i_i2c;
-
+  chan c_adc;
   par{
     i2c_master(&i_i2c, 1, p_scl, p_sda, 400);
-    test(i_i2c);
-    test_adc();
+    test(i_i2c, c_adc);
+    test_adc(c_adc);
     test_quadrature();
   }
   return 0;
