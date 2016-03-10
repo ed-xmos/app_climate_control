@@ -3,6 +3,7 @@
 #include <xclib.h>
 #include <string.h>
 #include <timer.h>
+#include <xscope.h>
 
 #include "i2c.h"
 #include "i2c_wrapper.h"
@@ -18,6 +19,11 @@
 port p_scl = XS1_PORT_1A;
 port p_sda = XS1_PORT_1B;
 port reset = XS1_PORT_32A;
+
+port p_adc = XS1_PORT_1D;
+
+port p_quad_0 = XS1_PORT_1E;
+port p_quad_1 = XS1_PORT_1F;
 
 unsigned char scrn_buff[SCREEN_BUFFER_BYTES] = {0};
 
@@ -318,13 +324,74 @@ void test(client i2c_master_if i_i2c){
   }
 }
 
+#define K   6
+/* 1st order recursive filter aka leaky integrator
+ *      K    Bandwidth  Rise Time (samps)
+ *      1    0.12       3
+ *      2    0.047      8
+ *      3    0.022      16
+ *      4    0.010      34
+ *      5    0.0051     69
+ *      6    0.0026     140
+ *      7    0.0012     280
+ *      8    0.0007     561
+ */
 
+void test_adc(void){
+    timer t;
+    int t_start, t_end, t_diff, adc_val, filter_reg = 0;
+    int tp_start, tp_end, tp_diff, port_timer_rollover;
+    while(1){
+        p_adc <: 1;
+        delay_microseconds(100);    //Send a good solid 1
+        p_adc :> int _ @ tp_start;   //Turn around port
+        t :> t_start ;               //grab time
+        p_adc when pinseq(0) :> int _ @ tp_end;
+        t :> t_end;
+        port_timer_rollover  = (t_end-t_start) >> 15;
+        t_diff = t_end - t_start;
+        tp_diff = tp_end - tp_start;
+        tp_diff = sext(tp_diff, 16);
+        //? tp_end - tp_start : tp_start - tp_end;
+
+        //debug_printf("Raw ADC timer=%d, port=%d, rollover=%d\n", t_diff, tp_diff, port_timer_rollover);
+        xscope_int(0, t_diff);
+        xscope_int(1, tp_diff);
+
+
+        filter_reg = filter_reg - (filter_reg >> K) + (t_end - t_start); //Leaky integrator
+        adc_val = filter_reg >> K;
+        //adc_val >>= 10;
+        //xscope_int(0, adc_val);
+
+        //debug_printf("Filtered ADC val = %d\n", adc_val);
+        delay_milliseconds(10);
+    }
+}
+
+
+
+void test_quadrature(void){
+    while(1){
+        select{
+            case p_quad_0 when pinsneq(1) :> int _:
+                debug_printf("quad_0\n");
+            break;
+
+            case p_quad_1 when pinsneq(1) :> int _:
+                debug_printf("quad_1\n");
+            break;
+        }
+    }
+}
 int main(void){
   i2c_master_if i_i2c;
 
   par{
     i2c_master(&i_i2c, 1, p_scl, p_sda, 400);
     test(i_i2c);
+    test_adc();
+    test_quadrature();
   }
   return 0;
 }
