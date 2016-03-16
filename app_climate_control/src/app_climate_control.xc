@@ -26,6 +26,8 @@ port p_adc = XS1_PORT_1D;
 port p_quad_0 = XS1_PORT_1E;
 port p_quad_1 = XS1_PORT_1F;
 
+port p_dht22 = XS1_PORT_1H;
+
 unsigned char scrn_buff[SCREEN_BUFFER_BYTES] = {0};
 
 
@@ -374,6 +376,91 @@ void test_adc(chanend c_adc){
 
 
 
+// how many timing transitions we need to keep track of. 2 * number bits + extra
+#define MAXTIMINGS 85
+#define _count     40   //Threshold in us signifying 1 or zero
+
+void test_dht22(void){
+
+    unsigned char data[5];
+    int laststate = 1;
+    int currstate;
+    int counter;
+    int j;
+
+
+    p_dht22 :> void;
+    while(1){
+        j = 0;
+        data[0] = data[1] = data[2] = data[3] = data[4] = 0;
+
+        // pull the pin high and wait 250 milliseconds
+        p_dht22 <: 1;
+        delay_milliseconds(250);
+
+        // now pull it low for ~20 milliseconds
+        p_dht22 <: 0;
+        delay_milliseconds(20);
+        p_dht22 <: 1;
+        delay_microseconds(40);
+        p_dht22 :> laststate; //Let go of pin
+
+        // read in timings
+
+
+        for (int i=0; i< MAXTIMINGS; i++) {
+          counter = 0;
+          p_dht22 :> currstate;
+          laststate = currstate;
+          while (currstate == laststate) {
+          //while (digitalRead(_pin) == laststate) {
+            counter++;
+            delay_microseconds(1);
+            if (counter == 255) {
+              break;
+            }
+            p_dht22 :> currstate;
+          }
+
+          if (counter == 255) break;
+
+          // ignore first 3 transitions
+          if ((i >= 2) && (i%2 != 0)) {
+            // shove each bit into the storage bytes
+            data[j/8] <<= 1;
+            if (counter > _count)
+              data[j/8] |= 1;
+            j++;
+          }
+
+        };
+
+        /*
+        Serial.println(j, DEC);
+        Serial.print(data[0], HEX); Serial.print(", ");
+        Serial.print(data[1], HEX); Serial.print(", ");
+        Serial.print(data[2], HEX); Serial.print(", ");
+        Serial.print(data[3], HEX); Serial.print(", ");
+        Serial.print(data[4], HEX); Serial.print(" =? ");
+        Serial.println(data[0 ] + data[1] + data[2] + data[3], HEX);
+        */
+        //printf("DHT22: %x, %x, %x, %x, %x, %x\n", data[0], data[1], data[2], data[3], data[4], (data[0] + data[1] + data[2] + data[3]) & 0xFF);
+
+        printf("Temp = %.1f\tRH % = %.1f\n", (float)((data[2] << 8) + data[3]) / 10, (float)((data[0] << 8) + data[1]) / 10);
+        delay_milliseconds(2000);
+
+        // check we read 40 bits and that the checksum matches
+/*
+        if ((j >= 40) &&
+            (data[4] == ((data[0] + data[1] + data[2] + data[3]) & 0xFF)) ) {
+          return 0;
+        }
+        else return -1;
+            */
+    }
+}
+
+
 void test_quadrature(void){
     while(1){
         select{
@@ -395,6 +482,7 @@ int main(void){
     test(i_i2c, c_adc);
     test_adc(c_adc);
     test_quadrature();
+    test_dht22();
   }
   return 0;
 }
